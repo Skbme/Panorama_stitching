@@ -1,0 +1,102 @@
+%% images are taken left to right.
+clc; clear all; close all;
+dir_img1 = 'img_sev1.jpg'
+dir_img2 = 'img_sev2.jpg'
+
+img1 = im2double(rgb2gray(imread(dir_img1)));
+img2 = im2double(rgb2gray(imread(dir_img2)));
+img1_rgb = im2double(imread(dir_img1));
+img2_rgb = im2double(imread(dir_img2));
+img1 = imrotate(img1,-90);
+img2 = imrotate(img2,-90);
+img1_rgb = imrotate(img1_rgb,-90);
+img2_rgb = imrotate(img2_rgb,-90);
+
+% ginput coordinate .
+N_point = 4;
+
+imshow(img1,[])
+% n features for first image
+[x_p,y_p] = ginput(N_point);
+% 
+imshow(img2,[])
+%n features for second image
+[x,y] = ginput(N_point);
+
+img1_points = [x y];
+img2_points = [x_p y_p];
+
+H=[]
+for i = 1:10000
+    initial_error = 100;
+    
+    randIndexes = randperm(N_point,4);
+    im1pts = img1_points(randIndexes,:);
+    im2pts = img2_points(randIndexes,:);
+    
+    A = estimate_Homography(im1pts,im2pts,4); 
+    
+    % forward error
+    im1ptsForward = forward_projection(im1pts,A)
+    im1ptsForward= im1ptsForward(:,1:2);
+    errorForward = sum((im1ptsForward-im2pts).^2,2).^0.5;
+    totalForwardError = sum(errorForward);
+
+    % Backward error 
+    im2ptsBackward = backward_projection(im2pts,A);
+    im2ptsBackward= im2ptsBackward(:,1:2);
+    errorBackward = sum((im2ptsBackward-im1pts).^2,2).^0.5;
+    totalBackwardError = sum(errorBackward);
+    totalerror = totalForwardError+totalBackwardError;
+    %% Total Geometric Error
+    if initial_error > totalerror
+        initial_error = totalerror;
+        H = A;
+    end    
+end
+
+tform = projective2d(H);
+w_img2= imwarp(img2, tform);  
+w_img2_rgb = imwarp(img2_rgb, tform);
+
+figure()
+subplot(1,3,1)
+imshow(img1,[])
+subplot(1,3,2)
+imshow(w_img2,[])
+subplot(1,3,3)
+imshow(img2,[])
+
+% Translation warped image_2 to target image_1
+figure()
+imshow(img1,[])
+[tx,ty] = ginput(1);
+figure()
+imshow(w_img2,[])
+[ttx,tty] = ginput(1);
+
+Tx = int32(abs(tx - ttx));
+Ty = int32(abs(ty-  tty));
+
+blendedimg = zeros(size(w_img2,1)+Ty, size(w_img2,2)+Tx , 3);
+
+for i = 1:size(img1_rgb,2)
+    for j = 1:size(img1_rgb,1)
+        blendedimg(Ty+j,i,1) = img1_rgb(j,i,1);
+        blendedimg(Ty+j,i,2) = img1_rgb(j,i,2);
+        blendedimg(Ty+j,i,3) = img1_rgb(j,i,3);
+    end
+end
+for i = 1:size(w_img2_rgb,2)
+    for j = 1:size(w_img2_rgb,1)
+          blendedimg(j,Tx +i,1) = ( blendedimg(j,Tx +i,1) + w_img2_rgb(j,i,1))/2;
+          blendedimg(j,Tx +i,2) = ( blendedimg(j,Tx +i,2) + w_img2_rgb(j,i,2))/2;
+          blendedimg(j,Tx +i,3) = ( blendedimg(j,Tx +i,3) + w_img2_rgb(j,i,3))/2;
+    end
+end
+
+figure()
+imshow(blendedimg,[])
+%%
+fprintf( "forward error" forward error)
+
